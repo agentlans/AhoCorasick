@@ -1,3 +1,23 @@
+// Copyright 2022 Alan Tseng
+// 
+// This file is part of AhoCorasick.
+// 
+// AhoCorasick is free software: you can redistribute it and/or modify it under 
+// the terms of the GNU Lesser General Public License as published by the Free 
+// Software Foundation, either version 3 of the License, or (at your option) 
+// any later version.
+// 
+// AhoCorasick is distributed in the hope that it will be useful, but WITHOUT 
+// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+// FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License 
+// for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public License 
+// along with AhoCorasick. If not, see <https://www.gnu.org/licenses/>.
+
+#ifndef _AHOCORASICKLIB
+#define _AHOCORASICKLIB
+
 #include <vector>
 #include <queue>
 #include <memory>
@@ -111,7 +131,7 @@ template <class Char>
 struct ActionFunc {
     void operator()(NodeS<Char> v) const {
         // Add suffix link to Node v
-        if (v->is_root()) return; // -------------------------------------------
+        if (v->is_root()) return;
         add_suffix_link(*v);
         NodeS<Char> u = v->suffix_link.lock();
         // Fill the output links
@@ -190,6 +210,7 @@ std::set<NodeS<Char>> do_output(NodeS<Char> node, int i, Output callback) {
     return output_nodes;
 }
 
+// Aho-Corasick algorithm including its tree automaton
 template <class Char, class Output>
 class AhoCorasick {
 public:
@@ -229,24 +250,4 @@ private:
     int i = 0;
 };
 
-#include <iostream>
-
-// Main program
-int main() {
-    auto o = [](int start, const std::string& str) {
-    	std::cout << str << " found at position " << start << std::endl;
-    };
-    AhoCorasick<char,decltype(o)> ac(o);
-    ac.add("He");
-    ac.add("Hello");
-    ac.add("HelloWorld");
-    ac.add("loW");
-    ac.finish();
-
-    char input[] = "11234HelloHelloWorld1234";
-    for (const auto& x : input) {
-    	ac.next(x);
-    }
-    ac.reset();
-}
-
+#endif
