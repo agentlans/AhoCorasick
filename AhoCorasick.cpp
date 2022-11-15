@@ -20,19 +20,20 @@ void set_union(SetType& s1, const SetType& s2) {
 // Node in the trie
 template <class Char>
 struct Node : std::enable_shared_from_this<Node<Char>> {
-    typedef std::shared_ptr<Node<Char>> NodePtr;
+    typedef std::shared_ptr<Node<Char>> NodeS;
+    typedef std::weak_ptr<Node<Char>> NodeW;
     // Attributes
-    std::weak_ptr<Node<Char>> parent;
+    NodeW parent;
     Char edge;
-    std::map<Char, NodePtr> children;
+    std::map<Char, NodeS> children;
     bool end = false;
-    std::weak_ptr<Node<Char>> suffix_link;
-    std::weak_ptr<Node<Char>> output_link;
-    NodePtr go_to_or_add(Char edge) {
+    NodeW suffix_link;
+    NodeW output_link;
+    NodeW go_to_or_add(Char edge) {
         if (!contains(children, edge)) {
-            NodePtr new_child = std::make_shared<Node<Char>>();
+            NodeS new_child = std::make_shared<Node<Char>>();
             new_child->edge = edge;
-            new_child->parent = this->shared_from_this();
+            new_child->parent = this->shared_from_this(); // = this;
             children[edge] = new_child;
         }
         return children[edge];
@@ -44,7 +45,7 @@ struct Node : std::enable_shared_from_this<Node<Char>> {
 };
 
 template <class Char>
-using NodeT = std::shared_ptr<Node<Char>>;
+using NodeS = std::shared_ptr<Node<Char>>;
 
 template <class Char>
 using NodeW = std::weak_ptr<Node<Char>>;
@@ -55,7 +56,7 @@ struct Trie {
     Trie() : root(std::make_shared<Node<Char>>()) {}
     // Adds a word to the trie.
     void add(const Char* word) {
-        std::weak_ptr<Node<Char>> v = root;
+        NodeW<Char> v = root;
         auto p = word;
         while (*p) {
             v = v.lock()->go_to_or_add(*p);
@@ -66,7 +67,7 @@ struct Trie {
     // Call this after finish adding words.
     void finish();
 
-    NodeT<Char> root;
+    NodeS<Char> root;
 };
 
 // Calls action() on root and its neighbours in breadth-first search manner
@@ -93,8 +94,8 @@ void add_suffix_link(Node<Char>& wa) {
     }
     // wa represents a string
     Char a = wa.edge;
-    NodeT<Char> w = wa.parent.lock();
-    NodeT<Char> x = w->suffix_link.lock(); 
+    NodeS<Char> w = wa.parent.lock();
+    NodeS<Char> x = w->suffix_link.lock(); 
     while (!x->is_root() && !contains(x->children, a)) {
         x = x->suffix_link.lock();
     }
@@ -108,11 +109,11 @@ void add_suffix_link(Node<Char>& wa) {
 
 template <class Char>
 struct ActionFunc {
-    void operator()(NodeT<Char> v) const {
+    void operator()(NodeS<Char> v) const {
         // Add suffix link to Node v
         if (v->is_root()) return; // -------------------------------------------
         add_suffix_link(*v);
-        NodeT<Char> u = v->suffix_link.lock();
+        NodeS<Char> u = v->suffix_link.lock();
         // Fill the output links
         if (u->end) {
             v->output_link = u;
@@ -124,9 +125,9 @@ struct ActionFunc {
 
 template <class Char>
 struct NeighbourFunc {
-    typedef NodeT<Char> NodeType;
-    std::vector<NodeType> operator()(NodeT<Char> v) const {
-        std::vector<NodeType> results;
+    typedef NodeS<Char> NodeSype;
+    std::vector<NodeSype> operator()(NodeS<Char> v) const {
+        std::vector<NodeSype> results;
         // Get the children of this node
         std::transform(
             v->children.begin(), v->children.end(),
@@ -144,7 +145,7 @@ void Trie<Char>::finish() {
 }
 
 template <class Char>
-void get_string(std::string& s, NodeT<Char> node) {
+void get_string(std::string& s, NodeS<Char> node) {
     auto x = node;
     s.clear();
     while (!x->is_root()) {
@@ -154,8 +155,8 @@ void get_string(std::string& s, NodeT<Char> node) {
 }
 
 template <class Char>
-NodeT<Char> next_node(const NodeT<Char> v, Char c) {
-    NodeT<Char> node = v;
+NodeS<Char> next_node(const NodeS<Char> v, Char c) {
+    NodeS<Char> node = v;
     while (true) {
         if (!node) return nullptr;
         if (contains(node->children, c)) {
@@ -172,10 +173,10 @@ NodeT<Char> next_node(const NodeT<Char> v, Char c) {
 }
 
 template <class Char, class Output>
-std::set<NodeT<Char>> do_output(NodeT<Char> node, int i, Output callback) {
-    typedef NodeT<Char> NodeT;
-    NodeT node2 = node;
-    std::set<NodeT> output_nodes;
+std::set<NodeS<Char>> do_output(NodeS<Char> node, int i, Output callback) {
+    typedef NodeS<Char> NodeS;
+    NodeS node2 = node;
+    std::set<NodeS> output_nodes;
     // Go through each output ending at the same position
     int start;
     std::string str;
@@ -192,7 +193,7 @@ std::set<NodeT<Char>> do_output(NodeT<Char> node, int i, Output callback) {
 template <class Char, class Output>
 class AhoCorasick {
 public:
-    typedef std::set<NodeT<Char>> NodeSet;
+    typedef std::set<NodeS<Char>> NodeSet;
     AhoCorasick(const Output& output) : output(output) {
         reset();
     }
