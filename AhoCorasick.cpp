@@ -11,33 +11,10 @@ bool contains(const T& container, U item) {
     return (container.count(item) > 0);
 }
 
-// Returns the values of a map or unordered_map
-template <class T, class U>
-void map_values(std::vector<U> results, const T& map) {
-    results.clear();
-    std::transform(
-        map.begin(), map.end(), std::back_inserter(results),
-        [](const auto& kv) {return kv.second;});
-}
-
 // Sets s1 = union(s1, s2)
 template <class SetType>
 void set_union(SetType& s1, const SetType& s2) {
     std::copy(s2.begin(), s2.end(), std::inserter(s1, s1.end()));
-    /*for (const auto& x : s2) {
-        s1.insert(x);
-    }*/
-}
-
-template <class Char>
-int string_length(const Char* s) {
-    Char* p = (Char*) s;
-    int i = 0;
-    while (*p) {
-        i++;
-        p++;
-    }
-    return i;
 }
 
 // Node in the trie
@@ -97,8 +74,7 @@ struct Trie {
 
 // Calls action() on root and its neighbours in breadth-first search manner
 template <class T, class NeighbourFunc, class ActionFunc>
-void breadth_first_search(
-const T& root, NeighbourFunc neighbours, ActionFunc action) {
+void breadth_first_search(const T& root, const NeighbourFunc& neighbours, const ActionFunc& action) {
     std::queue<T> q = std::queue<T>();
     q.push(root);
     while (!q.empty()) {
@@ -135,7 +111,7 @@ void add_suffix_link(Node<Char>& wa) {
 
 template <class Char>
 struct ActionFunc {
-    void operator()(Node<Char>* v) {
+    void operator()(Node<Char>* v) const {
         // Add suffix link to Node v
         if (v->is_root()) return;
         add_suffix_link(*v);
@@ -152,9 +128,13 @@ struct ActionFunc {
 template <class Char>
 struct NeighbourFunc {
     typedef Node<Char>* NodeType;
-    std::vector<NodeType> operator()(Node<Char>* v) {
+    std::vector<NodeType> operator()(Node<Char>* v) const {
         std::vector<NodeType> results;
-        map_values(results, v->children);
+        // Get the children of this node
+        std::transform(
+            v->children.begin(), v->children.end(),
+            std::back_inserter(results),
+            [](const auto& kv){return kv.second;});
         return results;
     }
 };
@@ -163,8 +143,7 @@ template <class Char>
 void Trie<Char>::finish() {
     NeighbourFunc<Char> neighbours;
     ActionFunc<Char> action;
-    breadth_first_search(
-        root, neighbours, action);
+    breadth_first_search(root, neighbours, action);
 }
 
 template <class Char>
@@ -196,8 +175,7 @@ Node<Char>* next_node(const Node<Char>* v, Char c) {
 }
 
 template <class Char, class Output>
-std::set<Node<Char>*> do_output(
-Node<Char>* node, int i, Output callback) {
+std::set<Node<Char>*> do_output(Node<Char>* node, int i, Output callback) {
     typedef Node<Char>* NodeT;
     NodeT node2 = node;
     std::set<NodeT> output_nodes;
