@@ -19,57 +19,54 @@ void set_union(SetType& s1, const SetType& s2) {
 
 // Node in the trie
 template <class Char>
-struct Node {
-    typedef Node<Char>* NodePtr;
+struct Node : std::enable_shared_from_this<Node<Char>> {
+    typedef std::shared_ptr<Node<Char>> NodePtr;
     // Attributes
-    NodePtr parent = nullptr;
+    std::weak_ptr<Node<Char>> parent;
     Char edge;
     std::map<Char, NodePtr> children;
     bool end = false;
-    NodePtr suffix_link = nullptr;
-    NodePtr output_link = nullptr;
-    // Destructor
-    ~Node() {
-        for (auto& kv : children) {
-            delete kv.second;
-        }
-    }
+    std::weak_ptr<Node<Char>> suffix_link;
+    std::weak_ptr<Node<Char>> output_link;
     NodePtr go_to_or_add(Char edge) {
         if (!contains(children, edge)) {
-            NodePtr new_child = new Node<Char>();
+            NodePtr new_child = std::make_shared<Node<Char>>();
             new_child->edge = edge;
-            new_child->parent = this;
+            new_child->parent = this->shared_from_this();
             children[edge] = new_child;
         }
         return children[edge];
     }
     // Whether this node is a root node
     bool is_root() {
-        return (parent == nullptr);
+        return parent.expired();
     }
 };
+
+template <class Char>
+using NodeT = std::shared_ptr<Node<Char>>;
+
+template <class Char>
+using NodeW = std::weak_ptr<Node<Char>>;
 
 // Trie for Aho-Corasick algorithm
 template <class Char>
 struct Trie {
-    Trie() : root(new Node<Char>()) {}
-    ~Trie() {
-        delete root;
-    }
+    Trie() : root(std::make_shared<Node<Char>>()) {}
     // Adds a word to the trie.
     void add(const Char* word) {
-        Node<Char>* v = root;
+        std::weak_ptr<Node<Char>> v = root;
         auto p = word;
         while (*p) {
-            v = v->go_to_or_add(*p);
+            v = v.lock()->go_to_or_add(*p);
             p++;
         }
-        v->end = true;
+        v.lock()->end = true;
     }
     // Call this after finish adding words.
     void finish();
 
-    Node<Char>* root;
+    NodeT<Char> root;
 };
 
 // Calls action() on root and its neighbours in breadth-first search manner
@@ -90,16 +87,16 @@ void breadth_first_search(const T& root, const NeighbourFunc& neighbours, const 
 template <class Char>
 void add_suffix_link(Node<Char>& wa) {
     if (wa.is_root()) return;
-    if (wa.parent->is_root()) {
+    if (wa.parent.lock()->is_root()) {
         wa.suffix_link = wa.parent;
         return;
     }
     // wa represents a string
     Char a = wa.edge;
-    Node<Char>* w = wa.parent;
-    Node<Char>* x = w->suffix_link; 
+    NodeT<Char> w = wa.parent.lock();
+    NodeT<Char> x = w->suffix_link.lock(); 
     while (!x->is_root() && !contains(x->children, a)) {
-        x = x->suffix_link;
+        x = x->suffix_link.lock();
     }
     if (x->is_root()) {
         wa.suffix_link = x;
@@ -111,11 +108,11 @@ void add_suffix_link(Node<Char>& wa) {
 
 template <class Char>
 struct ActionFunc {
-    void operator()(Node<Char>* v) const {
+    void operator()(NodeT<Char> v) const {
         // Add suffix link to Node v
-        if (v->is_root()) return;
+        if (v->is_root()) return; // -------------------------------------------
         add_suffix_link(*v);
-        Node<Char>* u = v->suffix_link;
+        NodeT<Char> u = v->suffix_link.lock();
         // Fill the output links
         if (u->end) {
             v->output_link = u;
@@ -127,8 +124,8 @@ struct ActionFunc {
 
 template <class Char>
 struct NeighbourFunc {
-    typedef Node<Char>* NodeType;
-    std::vector<NodeType> operator()(Node<Char>* v) const {
+    typedef NodeT<Char> NodeType;
+    std::vector<NodeType> operator()(NodeT<Char> v) const {
         std::vector<NodeType> results;
         // Get the children of this node
         std::transform(
@@ -147,18 +144,18 @@ void Trie<Char>::finish() {
 }
 
 template <class Char>
-void get_string(std::string& s, Node<Char>* node) {
+void get_string(std::string& s, NodeT<Char> node) {
     auto x = node;
     s.clear();
     while (!x->is_root()) {
         s = x->edge + s;
-        x = x->parent;
+        x = x->parent.lock();
     }
 }
 
 template <class Char>
-Node<Char>* next_node(const Node<Char>* v, Char c) {
-    Node<Char>* node = (Node<Char>*) v;
+NodeT<Char> next_node(const NodeT<Char> v, Char c) {
+    NodeT<Char> node = v;
     while (true) {
         if (!node) return nullptr;
         if (contains(node->children, c)) {
@@ -168,15 +165,15 @@ Node<Char>* next_node(const Node<Char>* v, Char c) {
             break;
         } else {
             // Node doesn't have child c
-            node = node->suffix_link;
+            node = node->suffix_link.lock();
         }
     }
     return node;
 }
 
 template <class Char, class Output>
-std::set<Node<Char>*> do_output(Node<Char>* node, int i, Output callback) {
-    typedef Node<Char>* NodeT;
+std::set<NodeT<Char>> do_output(NodeT<Char> node, int i, Output callback) {
+    typedef NodeT<Char> NodeT;
     NodeT node2 = node;
     std::set<NodeT> output_nodes;
     // Go through each output ending at the same position
@@ -187,7 +184,7 @@ std::set<Node<Char>*> do_output(Node<Char>* node, int i, Output callback) {
         get_string(str, node2);
         start = i - str.size() + 1;
         callback(start, str);
-        node2 = node2->output_link;
+        node2 = node2->output_link.lock();
     }
     return output_nodes;
 }
@@ -195,8 +192,7 @@ std::set<Node<Char>*> do_output(Node<Char>* node, int i, Output callback) {
 template <class Char, class Output>
 class AhoCorasick {
 public:
-    typedef Node<Char>* NodeT;
-    typedef std::set<NodeT> NodeSet;
+    typedef std::set<NodeT<Char>> NodeSet;
     AhoCorasick(const Output& output) : output(output) {
         reset();
     }
